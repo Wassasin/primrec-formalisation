@@ -1,5 +1,4 @@
 Require Coq.Vectors.Fin.
-Require Import Coq.Program.Basics.
 
 Inductive primrec : nat -> Set :=
 | primrec_C {N : nat} : nat -> primrec N
@@ -9,7 +8,9 @@ Inductive primrec : nat -> Set :=
 | primrec_primrec {N : nat} : primrec N -> primrec (2+N) -> primrec (1+N)
 .
 
+Require Import Coq.Program.Basics.
 Definition finnil {A : Type} (bot : A) : Fin.t 0 -> A := fun _ => bot.
+Definition finnilnat := finnil 0.
 Definition finhd {A : Type} {N : nat} (xs : (Fin.t (1+N) -> A)) : A := xs Fin.F1.
 Definition fintail {A : Type} {N : nat} (xs : (Fin.t (1+N) -> A)) : Fin.t N -> A := compose xs Fin.FS.
 Definition fincons {A : Type} {N : nat} (x : A) (xs : (Fin.t N -> A)) (i : Fin.t (1+N)) : A :=
@@ -18,8 +19,6 @@ Definition fincons {A : Type} {N : nat} (x : A) (xs : (Fin.t N -> A)) (i : Fin.t
   | Fin.FS n j => fun H => xs ((eq_rec n Fin.t j N) (eq_add_S n N H))
   end eq_refl.
 Local Notation "h :: t" := (fincons h t) (at level 60, right associativity).
-
-Definition finnilnat := finnil 0.
 
 Fixpoint primrec_interpret {K : nat} (f : primrec K) {struct f} : (Fin.t K -> nat) -> nat :=
   match f in (primrec K) return ((Fin.t K -> nat) -> nat) with
@@ -33,8 +32,7 @@ Fixpoint primrec_interpret {K : nat} (f : primrec K) {struct f} : (Fin.t K -> na
         (fun _ y => primrec_interpret h (finhd xs :: y :: fintail xs)) (finhd xs)
   end.
 
-Definition ftype_gen (A B : Type) : nat -> Type := nat_rect (fun _ => Type) B (fun _ IHX => arrow A IHX).
-Definition ftype : nat -> Type : Type := ftype_gen nat nat.
+Definition ftype : nat -> Type := nat_rect (fun _ => Type) nat (fun _ IHX => arrow nat IHX).
 
 Fixpoint fconv {N : nat} (f : ftype N) {struct N} : (Fin.t N -> nat) -> nat :=
   fun xs => match N as n return (ftype n -> (Fin.t n -> nat) -> nat) with
@@ -42,39 +40,18 @@ Fixpoint fconv {N : nat} (f : ftype N) {struct N} : (Fin.t N -> nat) -> nat :=
   | S N => fun f xs => fconv (f (xs Fin.F1)) (compose xs Fin.FS)
   end f xs.
 
-Definition ftype_compose {N : nat} {A B C : Type} (g : B -> C) (f : ftype_gen A B N) : (ftype_gen A C N) :=
-  nat_rect (fun N => ftype_gen A B N -> ftype_gen A C N) g (fun N IHcomp f x => IHcomp (f x)) N f.
-
-Fixpoint construct {N : nat} : ftype_gen nat (Fin.t N -> nat) N :=
-  match N as N return (ftype_gen nat (Fin.t N -> nat) N) with
-   | 0 => finnilnat
-   | S N => fun x => ftype_compose (fincons x) construct
-   end.
-
-Definition fconv_inv {N : nat} (f : (Fin.t N -> nat) -> nat) : ftype N := ftype_compose f construct.
-
 Inductive is_primrec {N : nat} : ftype N -> Prop :=
 | function_is_primrec : forall f : ftype N, forall g : primrec N, forall xs : Fin.t N -> nat, (fconv f) xs = (primrec_interpret g) xs -> is_primrec f.
 
 Definition primrec_plus : primrec 2 :=
-  primrec_primrec
-    (primrec_proj Fin.F1) (primrec_comp primrec_S ((primrec_proj (Fin.FS Fin.F1)) :: finnil (primrec_C 0))).
+  primrec_primrec (primrec_proj Fin.F1) (primrec_comp primrec_S ((primrec_proj (Fin.FS Fin.F1)) :: finnil (primrec_C 0))).
 
 Require Import Arith.Plus.
-
-Variable x y : nat.
-
-Lemma plus_is_primrec : @is_primrec 2 plus.
+Lemma plus_is_primrec {x y : nat} : @is_primrec 2 plus.
 apply (@function_is_primrec 2 plus primrec_plus (x :: y :: finnilnat)).
-simpl. unfold finhd. unfold fintail. unfold compose. simpl.
-
-rewrite plus_comm.
-unfold nat_rec.
-unfold nat_rect.
-
+simpl. rewrite plus_comm. unfold finhd. unfold fintail. unfold compose. simpl.
+unfold nat_rec. unfold nat_rect.
 induction x.
 auto.
-inversion_clear IHn.
-simpl.
-auto.
+inversion_clear IHx. simpl. auto.
 Qed.
